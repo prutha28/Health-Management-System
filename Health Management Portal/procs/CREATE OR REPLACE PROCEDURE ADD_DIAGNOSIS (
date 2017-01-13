@@ -1,0 +1,72 @@
+CREATE OR REPLACE PROCEDURE ADD_DIAGNOSIS (
+   PATIENT_ID     IN     JSHARDA.PATIENT.PID%TYPE,
+   LOGGED_IN_ID   IN     JSHARDA.PATIENT.PID%TYPE,
+   OBSERVED_ON    IN     DATE,
+   D_NAME         IN     JSHARDA.DISEASE.DISEASE_NAME%TYPE,
+   RET               OUT NUMBER)
+IS                                                                          --
+   -- Declare program variables as shown below
+   -- variable_name data_type
+
+   -- RETURN VALUE DESCRIPTION
+   -- 0 - patient does not have Health supporter, cant add disease
+   -- -1 - User is not valid to add disease
+   -- -2 - Patient already has this disease
+   -- 1 - Diagnosis added correctly
+
+   CURSOR disease_details
+   IS
+      SELECT *
+        FROM JSHARDA.DISEASE
+       WHERE DISEASE_NAME = D_NAME;
+
+   IS_VALID_USER        BOOLEAN;
+   IS_P_ALREADY_HAS_D   BOOLEAN;
+BEGIN
+   IS_VALID_USER := CHECK_IF_USER_VALID (PATIENT_ID, LOGGED_IN_ID);
+
+   IS_P_ALREADY_HAS_D := IF_P_ALREADY_HAS_D (PATIENT_ID, D_NAME);
+
+   RET := GET_HS_COUNT (PATIENT_ID);
+
+   IF (RET > 0 AND IS_VALID_USER AND (NOT IS_P_ALREADY_HAS_D))
+   THEN
+      FOR d IN disease_details
+      LOOP
+         INSERT INTO JSHARDA.HAS_HEALTH_INDICATOR (DID,
+                                                   PID,
+                                                   MAX_VALUE,
+                                                   MIN_VALUE,
+                                                   FREQUENCY,
+                                                   MODIFIED_BY,
+                                                   OBSERVED_ON,
+                                                   RECORDED_ON,
+                                                   ENDED_ON)
+              VALUES (d.DID,
+                      PATIENT_ID,
+                      d.DEFAULT_MAX_VALUE,
+                      d.DEFAULT_MIN_VALUE,
+                      d.DEFAULT_FREQUENCY,
+                      LOGGED_IN_ID,
+                      OBSERVED_ON,
+                      CURRENT_TIMESTAMP,
+                      NULL);
+      END LOOP;
+
+      UPDATE JSHARDA.PATIENT
+         SET CATEGORY = 'S'
+       WHERE PID = PATIENT_ID;
+
+      RET := 1;
+   END IF;
+
+   IF (NOT IS_VALID_USER)
+   THEN
+      RET := -1;
+   ELSIF (IS_P_ALREADY_HAS_D)
+   THEN
+      RET := -2;
+   END IF;           /*
+             EXCEPTION WHEN exception_name THEN --statements; */
+END;                                                              --Procedure;
+/
